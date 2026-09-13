@@ -25,6 +25,11 @@ def generate_launch_description() -> LaunchDescription:
         "output_file",
         default_value=os.path.join(WORKSPACE, "paths", "score.txt"),
     )
+    max_speed = DeclareLaunchArgument("max_speed", default_value="1.0")
+    pid_kp = DeclareLaunchArgument("pid_kp", default_value="1.5")
+    pid_ki = DeclareLaunchArgument("pid_ki", default_value="0.0")
+    pid_kd = DeclareLaunchArgument("pid_kd", default_value="0.2")
+    cte_gain = DeclareLaunchArgument("cte_gain", default_value="1.0")
 
     sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(PKG_SHARE, "launch", "sim.launch.py")),
@@ -35,7 +40,16 @@ def generate_launch_description() -> LaunchDescription:
         executable="trajectory_controller_node",
         name="trajectory_controller_node",
         output="screen",
-        parameters=[{"path_file": LaunchConfiguration("path_file")}],
+        parameters=[
+            {
+                "path_file": LaunchConfiguration("path_file"),
+                "max_speed": LaunchConfiguration("max_speed"),
+                "pid_kp": LaunchConfiguration("pid_kp"),
+                "pid_ki": LaunchConfiguration("pid_ki"),
+                "pid_kd": LaunchConfiguration("pid_kd"),
+                "cte_gain": LaunchConfiguration("cte_gain"),
+            }
+        ],
     )
     scorer = Node(
         package="ardurover_nav",
@@ -57,4 +71,19 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
-    return LaunchDescription([gz_gui, path_file, output_file, sim, controller, scorer, rviz])
+    return LaunchDescription(
+        [
+            gz_gui,
+            path_file,
+            output_file,
+            max_speed,
+            pid_kp,
+            pid_ki,
+            pid_kd,
+            cte_gain,
+            sim,
+            controller,
+            scorer,
+            rviz,
+        ]
+    )

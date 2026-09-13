@@ -161,7 +161,10 @@ class PathScorerNode : public rclcpp::Node {
         maxProgress_ = std::max(maxProgress_, progress_along_path(x, y, path_));
         const double minProgress = std::min(2.0, 0.5 * pathLength_);
         const double goalDist = std::hypot(x - path_.back().x, y - path_.back().y);
-        if (goalDist <= goalRadius_ && maxProgress_ >= minProgress) {
+        // Require near-end along-track progress so self-approaching paths
+        // (2-complicated) do not finish when the polyline passes the end early.
+        const bool nearEndOfPath = maxProgress_ >= 0.90 * pathLength_;
+        if (goalDist <= goalRadius_ && maxProgress_ >= minProgress && nearEndOfPath) {
             ++goalTicks_;
         } else {
             goalTicks_ = 0;
