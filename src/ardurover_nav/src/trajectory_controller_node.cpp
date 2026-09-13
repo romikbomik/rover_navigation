@@ -11,7 +11,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
-#include "ardurover_nav/controller_pid.hpp"
+#include "ardurover_nav/controller_pure_pursuit.hpp"
 #include "ardurover_nav/path_io.hpp"
 
 namespace ardurover_nav {
@@ -43,7 +43,7 @@ class TrajectoryControllerNode : public rclcpp::Node {
             refPoints_.push_back(point);
         }
 
-        controller_ = std::make_unique<ControllerPID>(*this, std::move(path));
+        controller_ = std::make_unique<ControllerPurePursuit>(*this, std::move(path));
 
         timer_ = create_wall_timer(
             std::chrono::duration<double>(1.0 / rateHz), std::bind(&TrajectoryControllerNode::OnTimer, this)
