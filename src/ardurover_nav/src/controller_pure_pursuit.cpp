@@ -29,14 +29,14 @@ double clamp(double v, double lo, double hi) {
 ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Waypoint> path)
     : ArduroverController(node, path) {
     maxSpeed_ = node.declare_parameter("max_speed", 1.0);
-    lookaheadMin_ = node.declare_parameter("lookahead_min", 0.7);
-    lookaheadMax_ = node.declare_parameter("lookahead_max", 2.0);
-    lookaheadBase_ = node.declare_parameter("lookahead_base", 0.5);
-    lookaheadKv_ = node.declare_parameter("lookahead_k_v", 0.5);
+    lookaheadMin_ = node.declare_parameter("lookahead_min", 1.5);
+    lookaheadMax_ = node.declare_parameter("lookahead_max", 4.0);
+    lookaheadBase_ = node.declare_parameter("lookahead_base", 1.2);
+    lookaheadKv_ = node.declare_parameter("lookahead_k_v", 1.0);
     maxYawRate_ = node.declare_parameter("max_yaw_rate", 1.0);
     latAccelMax_ = node.declare_parameter("lat_accel_max", 1.5);
     decel_ = node.declare_parameter("decel", 0.8);
-    pivotAngle_ = node.declare_parameter("pivot_angle", 0.5);
+    pivotAngle_ = node.declare_parameter("pivot_angle", 0.8);
     pivotSpeed_ = node.declare_parameter("pivot_speed", 0.15);
     goalTolerance_ = node.declare_parameter("goal_tolerance", 0.25);
     yawRateSign_ = node.declare_parameter("yaw_rate_sign", 1.0);
@@ -45,7 +45,7 @@ ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Way
     stuckSpeedEps_ = node.declare_parameter("stuck_speed_eps", 0.08);
     stuckTicksLimit_ = static_cast<int>(node.declare_parameter("stuck_ticks_limit", 20));
 
-    PreprocessPath(path_);
+    BuildTrack(path_);
     lookaheadPub_ = node_.create_publisher<visualization_msgs::msg::Marker>("/lookahead_marker", 1);
 
     RCLCPP_INFO_STREAM(
@@ -54,10 +54,10 @@ ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Way
     );
 }
 
-void ControllerPurePursuit::PreprocessPath(std::vector<Waypoint> path) {
+void ControllerPurePursuit::BuildTrack(const std::vector<Waypoint>& path) {
     constexpr double kMinSpacing = 0.05;
-
     track_.clear();
+    track_.reserve(path.size());
     for (const auto& wp : path) {
         if (!track_.empty()) {
             const double dx = wp.x - track_.back().x;
@@ -74,28 +74,9 @@ void ControllerPurePursuit::PreprocessPath(std::vector<Waypoint> path) {
     }
 
     if (track_.empty()) {
-        throw std::runtime_error("Path is empty after de-duplication");
+        throw std::runtime_error("Path is empty");
     }
     pathLength_ = track_.back().s;
-
-    // Mild moving-average smoother used only for curvature estimation.
-    constexpr double kSmoothHalfWindow = 0.5;
-    smooth_.resize(track_.size());
-    for (size_t i = 0; i < track_.size(); ++i) {
-        double sum_x = 0.0;
-        double sum_y = 0.0;
-        int count = 0;
-        for (size_t j = 0; j < track_.size(); ++j) {
-            if (std::abs(track_[j].s - track_[i].s) <= kSmoothHalfWindow) {
-                sum_x += track_[j].x;
-                sum_y += track_[j].y;
-                ++count;
-            }
-        }
-        smooth_[i].x = sum_x / static_cast<double>(count);
-        smooth_[i].y = sum_y / static_cast<double>(count);
-        smooth_[i].s = track_[i].s;
-    }
 }
 
 ControllerPurePursuit::Projection ControllerPurePursuit::ProjectOntoPath(double px, double py) const {
@@ -186,20 +167,20 @@ ControllerPurePursuit::PathPoint ControllerPurePursuit::PointAtArcLength(double 
 double ControllerPurePursuit::PathCurvatureNear(double s) const {
     const double s0 = clamp(s, 0.0, pathLength_);
     const double s1 = clamp(s + curvaturePreview_, 0.0, pathLength_);
-    if (s1 - s0 < 0.3 || smooth_.size() < 3) {
+    if (s1 - s0 < 0.3 || track_.size() < 3) {
         return 0.0;
     }
 
     auto heading_at = [this](double ss) {
         ss = clamp(ss, 0.0, pathLength_);
         size_t i = 0;
-        while (i + 1 < smooth_.size() && smooth_[i + 1].s < ss) {
+        while (i + 1 < track_.size() && track_[i + 1].s < ss) {
             ++i;
         }
-        if (i + 1 >= smooth_.size()) {
-            i = smooth_.size() - 2;
+        if (i + 1 >= track_.size()) {
+            i = track_.size() - 2;
         }
-        return std::atan2(smooth_[i + 1].y - smooth_[i].y, smooth_[i + 1].x - smooth_[i].x);
+        return std::atan2(track_[i + 1].y - track_[i].y, track_[i + 1].x - track_[i].x);
     };
 
     double max_abs_kappa = 0.0;
@@ -272,13 +253,6 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odometry) {
     const double bearing = std::atan2(target.y - py, target.x - px);
     const double alpha = wrap_angle(bearing - yaw);
     const double kappa_pp = (2.0 * std::sin(alpha)) / std::max(Ld, 1e-3);
-
-    double path_yaw = 0.0;
-    {
-        const size_t i = std::min(proj.seg_index, track_.size() - 2);
-        path_yaw = std::atan2(track_[i + 1].y - track_[i].y, track_[i + 1].x - track_[i].x);
-    }
-    const double heading_err = wrap_angle(path_yaw - yaw);
     const double abs_kappa = PathCurvatureNear(proj.s);
 
     double v_cmd = maxSpeed_;
@@ -288,7 +262,7 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odometry) {
         v_cmd = std::min(v_cmd, std::sqrt(latAccelMax_ / kappa_eff));
     }
 
-    const bool misaligned = std::abs(alpha) > pivotAngle_ || std::abs(heading_err) > pivotAngle_;
+    const bool misaligned = std::abs(alpha) > pivotAngle_;
     if (misaligned) {
         v_cmd = std::min(v_cmd, pivotSpeed_);
     }
@@ -309,8 +283,8 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odometry) {
         const bool reverse_nudge = (stuckTicks_ / 10) % 2 == 0;
         v_cmd = reverse_nudge ? -0.35 : 0.2;
         RCLCPP_WARN_THROTTLE(
-            node_.get_logger(), *node_.get_clock(), 1000,
-            "Stuck recovery: rock %s (alpha=%.2f herr=%.2f)", reverse_nudge ? "reverse" : "forward", alpha, heading_err
+            node_.get_logger(), *node_.get_clock(), 1000, "Stuck recovery: rock %s (alpha=%.2f)",
+            reverse_nudge ? "reverse" : "forward", alpha
         );
     } else if (stuckTicks_ >= stuckTicksLimit_) {
         v_cmd = 0.0;
@@ -323,11 +297,8 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odometry) {
 
     const double v_for_omega = std::max(std::abs(v_cmd), omegaSpeedFloor_);
     double omega = clamp(v_for_omega * kappa_pp, -maxYawRate_, maxYawRate_);
-    omega += clamp(1.2 * heading_err, -maxYawRate_, maxYawRate_);
-    omega = clamp(omega, -maxYawRate_, maxYawRate_);
     if (misaligned || stuckTicks_ >= stuckTicksLimit_) {
-        const double turn = (std::abs(heading_err) > 1e-3) ? heading_err : alpha;
-        omega = (turn >= 0.0 ? 1.0 : -1.0) * maxYawRate_;
+        omega = (alpha >= 0.0 ? 1.0 : -1.0) * maxYawRate_;
     }
     omega *= yawRateSign_;
 
@@ -335,9 +306,8 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odometry) {
 
     RCLCPP_INFO_STREAM_THROTTLE(
         node_.get_logger(), *node_.get_clock(), 1000,
-        "v=" << v_cmd << " w=" << omega << " alpha=" << alpha << " herr=" << heading_err << " Ld=" << Ld
-             << " cte=" << proj.dist << " s=" << proj.s << "/" << pathLength_ << " kpath=" << abs_kappa
-             << " spd=" << speed_meas
+        "v=" << v_cmd << " w=" << omega << " alpha=" << alpha << " Ld=" << Ld << " cte=" << proj.dist
+             << " s=" << proj.s << "/" << pathLength_ << " kpath=" << abs_kappa << " spd=" << speed_meas
     );
 }
 
