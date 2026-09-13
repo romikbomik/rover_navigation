@@ -8,8 +8,7 @@
 
 namespace ardurover_nav {
 
-// Pure-pursuit tracker. Owns path projection locally so the shared
-// ReferencePath / launch / scorer stay unchanged.
+// Geometric pure-pursuit tracker. Steers toward a lookahead point on the path.
 class ControllerPurePursuit : public ArduroverController {
   public:
     ControllerPurePursuit(rclcpp::Node& node, std::vector<Waypoint> path);
@@ -24,7 +23,7 @@ class ControllerPurePursuit : public ArduroverController {
     };
 
     struct Projection {
-        size_t seg_index{0};
+        size_t segIndex{0};
         double t{0.0};
         double x{0.0};
         double y{0.0};
@@ -34,8 +33,11 @@ class ControllerPurePursuit : public ArduroverController {
 
     void BuildTrack(const std::vector<Waypoint>& path);
     Projection ProjectOntoPath(double px, double py) const;
+    void ConsiderSegment(Projection& best, size_t i, double px, double py) const;
     PathPoint PointAtArcLength(double s) const;
+    double HeadingAt(double s) const;
     double PathCurvatureNear(double s) const;
+    double WrapAngle(double a) const;
     void PublishLookaheadMarker(double x, double y) const;
 
     std::vector<PathPoint> track_;
