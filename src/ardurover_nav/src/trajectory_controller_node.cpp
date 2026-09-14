@@ -11,7 +11,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
-#include "ardurover_nav/ControllerImpl/controller_stanley.hpp"
+#include "ardurover_nav/controller_factory.hpp"
 #include "ardurover_nav/path_io.hpp"
 
 namespace ardurover_nav {
@@ -22,6 +22,7 @@ class TrajectoryControllerNode : public rclcpp::Node {
         pathFile_ = declare_parameter("path_file", std::string("paths/recorded.path"));
         controlEnabled_ = declare_parameter("control_enabled", true);
         const double rateHz = declare_parameter("control_rate_hz", 20.0);
+        const std::string algorithm = declare_parameter("controller", std::string("pid"));
 
         auto path = load_path(pathFile_);
         if (path.empty()) {
@@ -43,13 +44,16 @@ class TrajectoryControllerNode : public rclcpp::Node {
             refPoints_.push_back(point);
         }
 
-        controller_ = std::make_unique<ControllerStanley>(*this, std::move(path));
+        controller_ = MakeController(algorithm, *this, std::move(path));
 
         timer_ = create_wall_timer(
             std::chrono::duration<double>(1.0 / rateHz), std::bind(&TrajectoryControllerNode::OnTimer, this)
         );
 
-        RCLCPP_INFO_STREAM(get_logger(), "Loaded " << refPoints_.size() << " waypoints from " << pathFile_);
+        RCLCPP_INFO_STREAM(
+            get_logger(),
+            "Controller '" << algorithm << "': loaded " << refPoints_.size() << " waypoints from " << pathFile_
+        );
     }
 
   private:

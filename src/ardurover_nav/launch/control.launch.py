@@ -21,6 +21,11 @@ def generate_launch_description() -> LaunchDescription:
         "path_file",
         default_value=os.path.join(WORKSPACE, "paths", "recorded.path"),
     )
+    controller = DeclareLaunchArgument(
+        "controller",
+        default_value="pid",
+        description="Path-following algorithm: pid (default), stanley, or pure_pursuit.",
+    )
     output_file = DeclareLaunchArgument(
         "output_file",
         default_value=os.path.join(WORKSPACE, "paths", "score.txt"),
@@ -30,12 +35,17 @@ def generate_launch_description() -> LaunchDescription:
         PythonLaunchDescriptionSource(os.path.join(PKG_SHARE, "launch", "sim.launch.py")),
         launch_arguments={"gz_gui": LaunchConfiguration("gz_gui")}.items(),
     )
-    controller = Node(
+    controller_node = Node(
         package="ardurover_nav",
         executable="trajectory_controller_node",
         name="trajectory_controller_node",
         output="screen",
-        parameters=[{"path_file": LaunchConfiguration("path_file")}],
+        parameters=[
+            {
+                "path_file": LaunchConfiguration("path_file"),
+                "controller": LaunchConfiguration("controller"),
+            }
+        ],
     )
     scorer = Node(
         package="ardurover_nav",
@@ -57,4 +67,6 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
     )
 
-    return LaunchDescription([gz_gui, path_file, output_file, sim, controller, scorer, rviz])
+    return LaunchDescription(
+        [gz_gui, path_file, controller, output_file, sim, controller_node, scorer, rviz]
+    )
