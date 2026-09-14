@@ -6,11 +6,6 @@
 #include <stdexcept>
 
 namespace ardurover_nav {
-namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-}  // namespace
 
 ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Waypoint> path)
     : ArduroverController(node, path) {
@@ -36,9 +31,6 @@ ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Way
     stuckTicksLimit_ = static_cast<int>(node.declare_parameter("stuck_ticks_limit", 20));
 
     BuildTrack(path_);
-    lookaheadPub_ = node_.create_publisher<visualization_msgs::msg::Marker>(
-        "/lookahead_marker", 1
-    );
 
     RCLCPP_INFO_STREAM(
         node_.get_logger(), "ControllerPurePursuit ready: " << track_.size() << " track points, length "
@@ -47,17 +39,9 @@ ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Way
 }
 
 void ControllerPurePursuit::BuildTrack(const std::vector<Waypoint>& path) {
-    constexpr double kMinSpacing = 0.05;
     track_.clear();
     track_.reserve(path.size());
     for (const auto& wp : path) {
-        if (!track_.empty()) {
-            const double dx = wp.x - track_.back().x;
-            const double dy = wp.y - track_.back().y;
-            if (dx * dx + dy * dy < kMinSpacing * kMinSpacing) {
-                continue;
-            }
-        }
         PathPoint p;
         p.x = wp.x;
         p.y = wp.y;
@@ -245,35 +229,13 @@ double ControllerPurePursuit::PathCurvatureNear(double s, double preview) const 
 }
 
 double ControllerPurePursuit::WrapAngle(double a) const {
-    while (a > kPi) {
-        a -= 2.0 * kPi;
+    while (a > M_PI) {
+        a -= 2.0 * M_PI;
     }
-    while (a < -kPi) {
-        a += 2.0 * kPi;
+    while (a < -M_PI) {
+        a += 2.0 * M_PI;
     }
     return a;
-}
-
-void ControllerPurePursuit::PublishLookaheadMarker(double x, double y) const {
-    visualization_msgs::msg::Marker marker;
-    marker.header.frame_id = "map";
-    marker.header.stamp = node_.get_clock()->now();
-    marker.ns = "lookahead";
-    marker.id = 0;
-    marker.type = visualization_msgs::msg::Marker::SPHERE;
-    marker.action = visualization_msgs::msg::Marker::ADD;
-    marker.pose.position.x = x;
-    marker.pose.position.y = y;
-    marker.pose.position.z = 0.3;
-    marker.pose.orientation.w = 1.0;
-    marker.scale.x = 0.35;
-    marker.scale.y = 0.35;
-    marker.scale.z = 0.35;
-    marker.color.r = 0.1f;
-    marker.color.g = 0.4f;
-    marker.color.b = 1.0f;
-    marker.color.a = 1.0f;
-    lookaheadPub_->publish(marker);
 }
 
 void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odom) {
@@ -323,7 +285,6 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odom) {
     const PathPoint target = (proj.dist > 0.6)
         ? LookaheadPoint(proj.s, lookahead, px, py)
         : PointAtArcLength(proj.s + lookahead);
-    PublishLookaheadMarker(target.x, target.y);
 
     const double bearing = std::atan2(target.y - py, target.x - px);
     double alpha = WrapAngle(bearing - yaw);
@@ -332,7 +293,7 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odom) {
     const double heading_err = WrapAngle(RawHeadingAt(proj.s) - yaw);
     const bool reverse = std::abs(heading_err) > reverseAngle_;
     if (reverse) {
-        alpha = WrapAngle(alpha - std::copysign(kPi, alpha));
+        alpha = WrapAngle(alpha - std::copysign(M_PI, alpha));
     }
 
     const double kappa_pp = (2.0 * std::sin(alpha)) / std::max(lookahead, 1e-3);

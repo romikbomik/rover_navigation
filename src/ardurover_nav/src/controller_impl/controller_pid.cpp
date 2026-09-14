@@ -6,14 +6,12 @@
 namespace ardurover_nav {
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
-
 double wrap_angle(double a) {
-    while (a > kPi) {
-        a -= 2.0 * kPi;
+    while (a > M_PI) {
+        a -= 2.0 * M_PI;
     }
-    while (a < -kPi) {
-        a += 2.0 * kPi;
+    while (a < -M_PI) {
+        a += 2.0 * M_PI;
     }
     return a;
 }

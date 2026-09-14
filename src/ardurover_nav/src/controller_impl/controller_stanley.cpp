@@ -6,14 +6,12 @@
 namespace ardurover_nav {
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
-
 double wrap_angle(double a) {
-    while (a > kPi) {
-        a -= 2.0 * kPi;
+    while (a > M_PI) {
+        a -= 2.0 * M_PI;
     }
-    while (a < -kPi) {
-        a += 2.0 * kPi;
+    while (a < -M_PI) {
+        a += 2.0 * M_PI;
     }
     return a;
 }
@@ -81,7 +79,7 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
     bool reverse = false;
     if (std::abs(e_psi) > reverseAngle_) {
         reverse = true;
-        e_psi = wrap_angle(e_psi - std::copysign(kPi, e_psi));
+        e_psi = wrap_angle(e_psi - std::copysign(M_PI, e_psi));
     }
 
     const bool arriving = s_remain < slowRadius_ || dist_to_goal < slowRadius_;

@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <vector>
-#include <visualization_msgs/msg/marker.hpp>
 
 #include "ardurover_nav/ardurover_controller.hpp"
 
@@ -41,7 +40,6 @@ class ControllerPurePursuit : public ArduroverController {
     double HeadingAt(double s) const;
     double PathCurvatureNear(double s, double preview) const;
     double WrapAngle(double a) const;
-    void PublishLookaheadMarker(double x, double y) const;
 
     std::vector<PathPoint> track_;
     double pathLength_{0.0};
@@ -71,8 +69,6 @@ class ControllerPurePursuit : public ArduroverController {
     double curvaturePreview_{3.0};
     double stuckSpeedEps_{0.08};
     int stuckTicksLimit_{20};
-
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr lookaheadPub_;
 };
 
 }  // namespace ardurover_nav
