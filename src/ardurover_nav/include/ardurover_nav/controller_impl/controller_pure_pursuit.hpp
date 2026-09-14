@@ -35,6 +35,8 @@ class ControllerPurePursuit : public ArduroverController {
     Projection ProjectOntoPath(double px, double py) const;
     void ConsiderSegment(Projection& best, size_t i, double px, double py) const;
     PathPoint PointAtArcLength(double s) const;
+    PathPoint LookaheadPoint(double s0, double ld, double px, double py) const;
+    double HeadingLimitedLookahead(double s, double ld_max, double max_dtheta) const;
     double HeadingAt(double s) const;
     double PathCurvatureNear(double s) const;
     double WrapAngle(double a) const;
@@ -47,19 +49,22 @@ class ControllerPurePursuit : public ArduroverController {
     int stuckTicks_{0};
 
     double maxSpeed_{1.0};
-    double lookaheadMin_{1.5};
-    double lookaheadMax_{4.0};
-    double lookaheadBase_{1.2};
-    double lookaheadKv_{1.0};
+    double lookaheadMin_{0.45};
+    double lookaheadMax_{2.5};
+    double lookaheadBase_{0.5};
+    double lookaheadKv_{0.8};
+    double lookaheadKKappa_{1.5};
+    double lookaheadMaxDTheta_{0.6};
     double maxYawRate_{1.0};
-    double latAccelMax_{1.5};
+    double latAccelMax_{1.0};
     double decel_{0.8};
     double pivotAngle_{0.8};
     double pivotSpeed_{0.15};
+    double reverseAngle_{2.0};
     double goalTolerance_{0.25};
     double yawRateSign_{1.0};
     double omegaSpeedFloor_{0.35};
-    double curvaturePreview_{2.0};
+    double curvaturePreview_{3.0};
     double stuckSpeedEps_{0.08};
     int stuckTicksLimit_{20};
 
