@@ -19,6 +19,7 @@ ament_target_dependencies(path_recorder_node rclcpp nav_msgs)
 add_executable(trajectory_controller_node
   src/trajectory_controller_node.cpp
   src/ardurover_controller.cpp
+  src/controller_factory.cpp
   src/reference_path.cpp
   src/ControllerImpl/controller_pid.cpp
   src/ControllerImpl/controller_pure_pursuit.cpp
