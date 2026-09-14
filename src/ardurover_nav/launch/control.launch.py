@@ -30,6 +30,8 @@ def generate_launch_description() -> LaunchDescription:
     pid_ki = DeclareLaunchArgument("pid_ki", default_value="0.0")
     pid_kd = DeclareLaunchArgument("pid_kd", default_value="0.2")
     cte_gain = DeclareLaunchArgument("cte_gain", default_value="1.0")
+    stanley_k = DeclareLaunchArgument("stanley_k", default_value="2.0")
+    stanley_k_soft = DeclareLaunchArgument("stanley_k_soft", default_value="1.0")
 
     sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(PKG_SHARE, "launch", "sim.launch.py")),
@@ -48,6 +50,8 @@ def generate_launch_description() -> LaunchDescription:
                 "pid_ki": LaunchConfiguration("pid_ki"),
                 "pid_kd": LaunchConfiguration("pid_kd"),
                 "cte_gain": LaunchConfiguration("cte_gain"),
+                "stanley_k": LaunchConfiguration("stanley_k"),
+                "stanley_k_soft": LaunchConfiguration("stanley_k_soft"),
             }
         ],
     )
@@ -81,6 +85,8 @@ def generate_launch_description() -> LaunchDescription:
             pid_ki,
             pid_kd,
             cte_gain,
+            stanley_k,
+            stanley_k_soft,
             sim,
             controller,
             scorer,

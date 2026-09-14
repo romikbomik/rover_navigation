@@ -22,7 +22,8 @@ add_executable(trajectory_controller_node
   src/pid.cpp
   src/reference_path.cpp
   src/controller_pid.cpp
-  src/controller_pure_pursuit.cpp)
+  src/controller_pure_pursuit.cpp
+  src/controller_stanley.cpp)
 target_include_directories(trajectory_controller_node PRIVATE include)
 ament_target_dependencies(trajectory_controller_node rclcpp geometry_msgs nav_msgs mavros_msgs visualization_msgs)
 
