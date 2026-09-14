@@ -75,6 +75,7 @@ ControllerPID::ControllerPID(rclcpp::Node& node, std::vector<Waypoint> path)
     slowRadius_ = node.declare_parameter("slow_radius", 1.5);
     goalTolerance_ = node.declare_parameter("goal_tolerance", 0.25);
 
+    RCLCPP_WARN(node_.get_logger(), "ControllerPID is experimental / work in progress");
     RCLCPP_INFO_STREAM(
         node_.get_logger(), "ControllerPID ready: path length " << refPath_.Length() << " m, kp/ki/kd = " << kp << "/"
                                                                 << ki << "/" << kd
