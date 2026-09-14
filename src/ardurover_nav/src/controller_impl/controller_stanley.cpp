@@ -1,4 +1,4 @@
-#include "ardurover_nav/ControllerImpl/controller_stanley.hpp"
+#include "ardurover_nav/controller_impl/controller_stanley.hpp"
 
 #include <algorithm>
 #include <cmath>

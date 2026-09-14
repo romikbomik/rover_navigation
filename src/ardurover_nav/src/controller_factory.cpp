@@ -4,9 +4,9 @@
 #include <cctype>
 #include <stdexcept>
 
-#include "ardurover_nav/ControllerImpl/controller_pid.hpp"
-#include "ardurover_nav/ControllerImpl/controller_pure_pursuit.hpp"
-#include "ardurover_nav/ControllerImpl/controller_stanley.hpp"
+#include "ardurover_nav/controller_impl/controller_pid.hpp"
+#include "ardurover_nav/controller_impl/controller_pure_pursuit.hpp"
+#include "ardurover_nav/controller_impl/controller_stanley.hpp"
 
 namespace ardurover_nav {
 namespace {

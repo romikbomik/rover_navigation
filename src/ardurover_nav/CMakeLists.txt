@@ -21,9 +21,9 @@ add_executable(trajectory_controller_node
   src/ardurover_controller.cpp
   src/controller_factory.cpp
   src/reference_path.cpp
-  src/ControllerImpl/controller_pid.cpp
-  src/ControllerImpl/controller_pure_pursuit.cpp
-  src/ControllerImpl/controller_stanley.cpp)
+  src/controller_impl/controller_pid.cpp
+  src/controller_impl/controller_pure_pursuit.cpp
+  src/controller_impl/controller_stanley.cpp)
 target_include_directories(trajectory_controller_node PRIVATE include)
 ament_target_dependencies(trajectory_controller_node rclcpp geometry_msgs nav_msgs mavros_msgs visualization_msgs)
 

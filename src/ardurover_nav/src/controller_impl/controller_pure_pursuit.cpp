@@ -1,4 +1,4 @@
-#include "ardurover_nav/ControllerImpl/controller_pure_pursuit.hpp"
+#include "ardurover_nav/controller_impl/controller_pure_pursuit.hpp"
 
 #include <algorithm>
 #include <cmath>
