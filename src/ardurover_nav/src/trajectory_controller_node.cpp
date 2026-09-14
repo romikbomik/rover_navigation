@@ -11,7 +11,7 @@
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
-#include "ardurover_nav/controller_stanley.hpp"
+#include "ardurover_nav/ControllerImpl/controller_stanley.hpp"
 #include "ardurover_nav/path_io.hpp"
 
 namespace ardurover_nav {
