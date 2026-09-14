@@ -24,6 +24,40 @@ double clamp(double v, double lo, double hi) {
 
 }  // namespace
 
+ControllerPID::Pid::Pid(double kp, double ki, double kd, double integral_limit)
+    : kp_(kp), ki_(ki), kd_(kd), integralLimit_(integral_limit) {}
+
+double ControllerPID::Pid::Update(double error, double dt) {
+    if (dt <= 0.0) {
+        return kp_ * error;
+    }
+
+    integral_ += error * dt;
+    integral_ = std::clamp(integral_, -integralLimit_, integralLimit_);
+
+    const double derivative = hasPrev_ ? (error - prevError_) / dt : 0.0;
+    prevError_ = error;
+    hasPrev_ = true;
+
+    return kp_ * error + ki_ * integral_ + kd_ * derivative;
+}
+
+void ControllerPID::Pid::Reset() {
+    integral_ = 0.0;
+    prevError_ = 0.0;
+    hasPrev_ = false;
+}
+
+void ControllerPID::Pid::SetGains(double kp, double ki, double kd) {
+    kp_ = kp;
+    ki_ = ki;
+    kd_ = kd;
+}
+
+void ControllerPID::Pid::SetIntegralLimit(double limit) {
+    integralLimit_ = limit;
+}
+
 ControllerPID::ControllerPID(rclcpp::Node& node, std::vector<Waypoint> path)
     : ArduroverController(node, path), refPath_(path_), pid_(0.0, 0.0, 0.0, 0.5) {
     const double kp = node.declare_parameter("pid_kp", 1.5);
