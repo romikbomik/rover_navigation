@@ -23,8 +23,8 @@ def generate_launch_description() -> LaunchDescription:
     )
     controller = DeclareLaunchArgument(
         "controller",
-        default_value="pid",
-        description="Path-following algorithm: pid (default), stanley, or pure_pursuit.",
+        default_value="pure_pursuit",
+        description="Path-following algorithm: pure_pursuit (default), pid, or stanley.",
     )
     output_file = DeclareLaunchArgument(
         "output_file",

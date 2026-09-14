@@ -22,7 +22,7 @@ class TrajectoryControllerNode : public rclcpp::Node {
         pathFile_ = declare_parameter("path_file", std::string("paths/recorded.path"));
         controlEnabled_ = declare_parameter("control_enabled", true);
         const double rateHz = declare_parameter("control_rate_hz", 20.0);
-        const std::string algorithm = declare_parameter("controller", std::string("pid"));
+        const std::string algorithm = declare_parameter("controller", std::string("pure_pursuit"));
 
         auto path = load_path(pathFile_);
         if (path.empty()) {

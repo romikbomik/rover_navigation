@@ -36,6 +36,7 @@ ControllerStanley::ControllerStanley(rclcpp::Node& node, std::vector<Waypoint> p
     stuckSpeedEps_ = node.declare_parameter("stuck_speed_eps", 0.08);
     stuckTicksLimit_ = static_cast<int>(node.declare_parameter("stuck_ticks_limit", 20));
 
+    RCLCPP_WARN(node_.get_logger(), "ControllerStanley is experimental / work in progress");
     RCLCPP_INFO_STREAM(
         node_.get_logger(),
         "ControllerStanley ready: path length " << refPath_.Length() << " m, k/k_soft = " << kGain_ << "/" << kSoft_

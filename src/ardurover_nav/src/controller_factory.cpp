@@ -26,14 +26,14 @@ std::unique_ptr<ArduroverController> MakeController(
 ) {
     const std::string name = NormalizeName(algorithm);
 
-    if (name.empty() || name == "pid") {
+    if (name.empty() || name == "pure_pursuit") {
+        return std::make_unique<ControllerPurePursuit>(node, std::move(path));
+    }
+    if (name == "pid") {
         return std::make_unique<ControllerPID>(node, std::move(path));
     }
     if (name == "stanley") {
         return std::make_unique<ControllerStanley>(node, std::move(path));
-    }
-    if (name == "pure_pursuit") {
-        return std::make_unique<ControllerPurePursuit>(node, std::move(path));
     }
 
     throw std::invalid_argument(

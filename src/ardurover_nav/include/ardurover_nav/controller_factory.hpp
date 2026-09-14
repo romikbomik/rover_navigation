@@ -9,7 +9,7 @@
 
 namespace ardurover_nav {
 
-// Builds a path follower from a name: pid (default), stanley, or pure_pursuit.
+// Builds a path follower from a name: pure_pursuit (default), pid, or stanley.
 std::unique_ptr<ArduroverController> MakeController(
     const std::string& algorithm, rclcpp::Node& node, std::vector<Waypoint> path
 );
