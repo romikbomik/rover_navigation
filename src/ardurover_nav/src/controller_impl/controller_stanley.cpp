@@ -54,11 +54,21 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
 
     const PathProjection proj = refPath_.Project(px, py);
     const double s_remain = refPath_.RemainingLength(proj.s);
+    const double dist_to_goal = std::hypot(px - path_.back().x, py - path_.back().y);
 
-    if (s_remain < goalTolerance_) {
+    // Remaining-only at goal_tolerance (0.25 m) misses the recorded reverse tail
+    // on path 2 (~0.32 m). If the rover does not actually reverse onto that tail,
+    // s_remain plateaus above the threshold and Stanley keeps commanding motion
+    // past the end. Latch on remaining arc, or on Euclidean distance once we have
+    // followed most of the path — same idea as pure pursuit / the scorer.
+    constexpr double kRemainStop = 0.5;
+    const bool near_end = proj.s >= 0.90 * refPath_.Length();
+    if (s_remain < kRemainStop || (near_end && dist_to_goal < goalTolerance_)) {
         goalReached_ = true;
         PublishStop();
-        RCLCPP_INFO(node_.get_logger(), "Goal reached (s_remain=%.2f m) — holding stop", s_remain);
+        RCLCPP_INFO(
+            node_.get_logger(), "Goal reached (s_remain=%.2f m, dist=%.2f m) — holding stop", s_remain, dist_to_goal
+        );
         return;
     }
 
@@ -73,17 +83,22 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
         e_psi = wrap_angle(e_psi - std::copysign(kPi, e_psi));
     }
 
+    const bool arriving = s_remain < slowRadius_ || dist_to_goal < slowRadius_;
+
     // Three-case speed rule — no PID on speed (ArduRover closes that loop).
     double v = maxSpeed_;
     if (std::abs(e_psi) > pivotAngle_) {
         v = pivotSpeed_;
     }
-    if (s_remain < slowRadius_) {
-        v = std::min(std::abs(v), maxSpeed_ * (s_remain / slowRadius_));
+    if (arriving) {
+        const double arrive_r = std::min(s_remain, dist_to_goal);
+        v = std::min(std::abs(v), maxSpeed_ * (arrive_r / slowRadius_));
     }
     v = clamp(v, 0.0, maxSpeed_);
     if (reverse) {
-        v = -std::max(v, pivotSpeed_);
+        // Keep a reverse crawl in the middle of the path, but do not force
+        // pivotSpeed_ through the last waypoint — that drives past the goal.
+        v = arriving ? -v : -std::max(v, pivotSpeed_);
     }
 
     const double vx = odom.twist.twist.linear.x;
@@ -98,13 +113,15 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
         omega = (e_psi >= 0.0 ? 1.0 : -1.0) * maxYawRate_;
     }
 
-    if (speed_meas < stuckSpeedEps_) {
+    if (arriving) {
+        stuckTicks_ = 0;
+    } else if (speed_meas < stuckSpeedEps_) {
         ++stuckTicks_;
     } else {
         stuckTicks_ = 0;
     }
 
-    if (stuckTicks_ >= stuckTicksLimit_ * 3) {
+    if (!arriving && stuckTicks_ >= stuckTicksLimit_ * 3) {
         const bool reverse_nudge = (stuckTicks_ / 10) % 2 == 0;
         v = reverse_nudge ? -0.35 : 0.2;
         omega = (e_psi >= 0.0 ? 1.0 : -1.0) * maxYawRate_;
@@ -112,7 +129,7 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
             node_.get_logger(), *node_.get_clock(), 1000, "Stuck recovery: rock %s (e_psi=%.2f)",
             reverse_nudge ? "reverse" : "forward", e_psi
         );
-    } else if (stuckTicks_ >= stuckTicksLimit_) {
+    } else if (!arriving && stuckTicks_ >= stuckTicksLimit_) {
         v = 0.0;
         omega = (e_psi >= 0.0 ? 1.0 : -1.0) * maxYawRate_;
         RCLCPP_WARN_THROTTLE(
@@ -125,7 +142,7 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
     RCLCPP_INFO_STREAM_THROTTLE(
         node_.get_logger(), *node_.get_clock(), 1000,
         "v=" << v << " w=" << omega << " d=" << delta << " e_psi=" << e_psi << " e_ct=" << e_ct << " rev=" << reverse
-             << " s=" << proj.s << "/" << refPath_.Length()
+             << " s=" << proj.s << "/" << refPath_.Length() << " dgoal=" << dist_to_goal
     );
 }
 
