@@ -15,12 +15,12 @@ constexpr double kPi = 3.14159265358979323846;
 ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Waypoint> path)
     : ArduroverController(node, path) {
     maxSpeed_ = node.declare_parameter("max_speed", 1.0);
-    lookaheadMin_ = node.declare_parameter("lookahead_min", 0.45);
+    lookaheadMin_ = node.declare_parameter("lookahead_min", 0.75);
     lookaheadMax_ = node.declare_parameter("lookahead_max", 2.5);
-    lookaheadBase_ = node.declare_parameter("lookahead_base", 0.5);
-    lookaheadKv_ = node.declare_parameter("lookahead_k_v", 0.8);
-    lookaheadKKappa_ = node.declare_parameter("lookahead_k_kappa", 1.5);
-    lookaheadMaxDTheta_ = node.declare_parameter("lookahead_max_dtheta", 0.6);
+    lookaheadBase_ = node.declare_parameter("lookahead_base", 0.6);
+    lookaheadKv_ = node.declare_parameter("lookahead_k_v", 1.0);
+    lookaheadKKappa_ = node.declare_parameter("lookahead_k_kappa", 0.4);
+    lookaheadMaxDTheta_ = node.declare_parameter("lookahead_max_dtheta", 0.85);
     maxYawRate_ = node.declare_parameter("max_yaw_rate", 1.0);
     latAccelMax_ = node.declare_parameter("lat_accel_max", 1.0);
     decel_ = node.declare_parameter("decel", 0.8);
@@ -29,7 +29,8 @@ ControllerPurePursuit::ControllerPurePursuit(rclcpp::Node& node, std::vector<Way
     reverseAngle_ = node.declare_parameter("reverse_angle", 2.0);
     goalTolerance_ = node.declare_parameter("goal_tolerance", 0.25);
     yawRateSign_ = node.declare_parameter("yaw_rate_sign", 1.0);
-    omegaSpeedFloor_ = node.declare_parameter("omega_speed_floor", 0.35);
+    omegaSpeedFloor_ = node.declare_parameter("omega_speed_floor", 0.2);
+    omegaTau_ = node.declare_parameter("omega_tau", 0.2);
     curvaturePreview_ = node.declare_parameter("curvature_preview", 3.0);
     stuckSpeedEps_ = node.declare_parameter("stuck_speed_eps", 0.08);
     stuckTicksLimit_ = static_cast<int>(node.declare_parameter("stuck_ticks_limit", 20));
@@ -191,14 +192,14 @@ double ControllerPurePursuit::HeadingLimitedLookahead(double s, double ld_max, d
     const double s_stop = std::min(s + ld_max, pathLength_);
     for (double ss = s + kStep; ss <= s_stop; ss += kStep) {
         if (std::abs(WrapAngle(HeadingAt(ss) - h0)) > max_dtheta) {
-            return std::max(last, 0.35);
+            return std::max(last, 0.55);
         }
         last = ss - s;
     }
     return ld_max;
 }
 
-double ControllerPurePursuit::HeadingAt(double s) const {
+double ControllerPurePursuit::RawHeadingAt(double s) const {
     if (track_.size() < 2) {
         return 0.0;
     }
@@ -213,16 +214,28 @@ double ControllerPurePursuit::HeadingAt(double s) const {
     return std::atan2(track_[i + 1].y - track_[i].y, track_[i + 1].x - track_[i].x);
 }
 
-double ControllerPurePursuit::PathCurvatureNear(double s) const {
+double ControllerPurePursuit::HeadingAt(double s) const {
+    constexpr double kHalf = 0.3;
+    const PathPoint a = PointAtArcLength(s - kHalf);
+    const PathPoint b = PointAtArcLength(s + kHalf);
+    const double dx = b.x - a.x;
+    const double dy = b.y - a.y;
+    if (dx * dx + dy * dy < 1e-8) {
+        return RawHeadingAt(s);
+    }
+    return std::atan2(dy, dx);
+}
+
+double ControllerPurePursuit::PathCurvatureNear(double s, double preview) const {
     const double s0 = std::clamp(s, 0.0, pathLength_);
-    const double s1 = std::clamp(s + curvaturePreview_, 0.0, pathLength_);
+    const double s1 = std::clamp(s + preview, 0.0, pathLength_);
     if (s1 - s0 < 0.3 || track_.size() < 3) {
         return 0.0;
     }
 
     double max_abs_kappa = 0.0;
-    constexpr double kStep = 0.4;
-    for (double sa = s0; sa + 0.25 < s1; sa += kStep) {
+    constexpr double kStep = 0.8;
+    for (double sa = s0; sa + 0.4 < s1; sa += kStep) {
         const double sb = std::min(sa + kStep, s1);
         const double dtheta = WrapAngle(HeadingAt(sb) - HeadingAt(sa));
         const double kappa = std::abs(dtheta / (sb - sa));
@@ -291,32 +304,38 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odom) {
     const double vx = odom.twist.twist.linear.x;
     const double vy = odom.twist.twist.linear.y;
     const double speed_meas = std::hypot(vx, vy);
-    const double abs_kappa = PathCurvatureNear(proj.s);
+    const double dt = TickDt(odom.header.stamp);
+    // Upcoming curvature slows the rover; local curvature (not a 3 m preview of path
+    // noise) is what should shrink lookahead, otherwise straights weave.
+    const double abs_kappa = PathCurvatureNear(proj.s, curvaturePreview_);
+    const double kappa_ld = PathCurvatureNear(proj.s, 1.0);
 
-    // Shrink lookahead on tight corners so the target does not jump past hairpins.
-    const double speed_for_ld = std::max(speed_meas, 0.15);
+    const double speed_for_ld = std::max(speed_meas, 0.2);
     double lookahead = lookaheadBase_ + lookaheadKv_ * speed_for_ld;
-    lookahead /= (1.0 + lookaheadKKappa_ * abs_kappa);
+    lookahead /= (1.0 + lookaheadKKappa_ * kappa_ld);
     lookahead = std::clamp(lookahead, lookaheadMin_, lookaheadMax_);
     lookahead = std::min(lookahead, HeadingLimitedLookahead(proj.s, lookahead, lookaheadMaxDTheta_));
-    lookahead = std::max(lookahead, 0.35);
-    lookahead = std::min(lookahead, std::max(s_remain, 0.35));
+    lookahead = std::max(lookahead, 0.55);
+    lookahead = std::min(lookahead, std::max(s_remain, 0.55));
 
-    const PathPoint target = LookaheadPoint(proj.s, lookahead, px, py);
+    // Along-track target is stable on a wiggly recorded polyline; use the circle
+    // intersection only when already off the path.
+    const PathPoint target = (proj.dist > 0.6)
+        ? LookaheadPoint(proj.s, lookahead, px, py)
+        : PointAtArcLength(proj.s + lookahead);
     PublishLookaheadMarker(target.x, target.y);
 
     const double bearing = std::atan2(target.y - py, target.x - px);
     double alpha = WrapAngle(bearing - yaw);
 
     // Path 2 records reverse segments; chase those with the rear instead of U-turning.
-    const double heading_err = WrapAngle(HeadingAt(proj.s) - yaw);
+    const double heading_err = WrapAngle(RawHeadingAt(proj.s) - yaw);
     const bool reverse = std::abs(heading_err) > reverseAngle_;
     if (reverse) {
         alpha = WrapAngle(alpha - std::copysign(kPi, alpha));
     }
 
-    const double ld_used = std::max(std::hypot(target.x - px, target.y - py), 1e-3);
-    const double kappa_pp = (2.0 * std::sin(alpha)) / ld_used;
+    const double kappa_pp = (2.0 * std::sin(alpha)) / std::max(lookahead, 1e-3);
 
     double v_cmd = maxSpeed_;
     if (abs_kappa > 1e-4) {
@@ -366,6 +385,15 @@ void ControllerPurePursuit::Control(const nav_msgs::msg::Odometry& odom) {
     double omega = std::clamp(v_for_omega * kappa_pp, -maxYawRate_, maxYawRate_);
     if (misaligned || recovering) {
         omega = (alpha >= 0.0 ? 1.0 : -1.0) * maxYawRate_;
+        omegaFilt_ = omega;
+        haveOmegaFilt_ = true;
+    } else if (!haveOmegaFilt_) {
+        omegaFilt_ = omega;
+        haveOmegaFilt_ = true;
+    } else {
+        const double alpha_f = dt / (omegaTau_ + dt);
+        omegaFilt_ += alpha_f * (omega - omegaFilt_);
+        omega = omegaFilt_;
     }
     omega *= yawRateSign_;
 
