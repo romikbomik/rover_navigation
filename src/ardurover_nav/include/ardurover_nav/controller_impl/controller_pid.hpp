@@ -13,29 +13,19 @@ class ControllerPID : public ArduroverController {
 
   private:
     // Textbook scalar PID: u = kp*e + ki*integral + kd*derivative.
-    class Pid {
-      public:
-        Pid(double kp, double ki, double kd, double integral_limit);
-
-        double Update(double error, double dt);
-        void Reset();
-
-        void SetGains(double kp, double ki, double kd);
-        void SetIntegralLimit(double limit);
-
-      private:
-        double kp_{0.0};
-        double ki_{0.0};
-        double kd_{0.0};
-        double integralLimit_{0.0};
-        double integral_{0.0};
-        double prevError_{0.0};
-        bool hasPrev_{false};
-    };
+    double PidUpdate(double error, double dt);
+    void ResetPid();
 
     ReferencePath refPath_;
-    Pid pid_;
     bool goalReached_{false};
+
+    double kp_{0.0};
+    double ki_{0.0};
+    double kd_{0.0};
+    double integralLimit_{0.5};
+    double integral_{0.0};
+    double prevError_{0.0};
+    bool hasPrev_{false};
 
     double cteGain_{1.0};
     double maxSpeed_{1.0};

@@ -4,23 +4,6 @@
 #include <cmath>
 
 namespace ardurover_nav {
-namespace {
-
-constexpr double kPi = 3.14159265358979323846;
-
-double wrap_angle(double a) {
-    while (a > kPi) {
-        a -= 2.0 * kPi;
-    }
-    while (a < -kPi) {
-        a += 2.0 * kPi;
-    }
-    return a;
-}
-
-double clamp(double v, double lo, double hi) { return std::max(lo, std::min(hi, v)); }
-
-}  // namespace
 
 ControllerStanley::ControllerStanley(rclcpp::Node& node, std::vector<Waypoint> path)
     : ArduroverController(node, path), refPath_(path_) {
@@ -73,7 +56,7 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
         return;
     }
 
-    double e_psi = wrap_angle(proj.heading - yaw);
+    double e_psi = WrapAngle(proj.heading - yaw);
     const double e_ct = proj.cross_track;
 
     // Path 2 records a reverse: geometric heading is ~π from the rover yaw.
@@ -81,7 +64,7 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
     bool reverse = false;
     if (std::abs(e_psi) > reverseAngle_) {
         reverse = true;
-        e_psi = wrap_angle(e_psi - std::copysign(kPi, e_psi));
+        e_psi = WrapAngle(e_psi - std::copysign(M_PI, e_psi));
     }
 
     const bool arriving = s_remain < slowRadius_ || dist_to_goal < slowRadius_;
@@ -95,7 +78,7 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
         const double arrive_r = std::min(s_remain, dist_to_goal);
         v = std::min(std::abs(v), maxSpeed_ * (arrive_r / slowRadius_));
     }
-    v = clamp(v, 0.0, maxSpeed_);
+    v = std::clamp(v, 0.0, maxSpeed_);
     if (reverse) {
         // Keep a reverse crawl in the middle of the path, but do not force
         // pivotSpeed_ through the last waypoint — that drives past the goal.
@@ -108,8 +91,8 @@ void ControllerStanley::Control(const nav_msgs::msg::Odometry& odom) {
     const double v_denom = std::max(speed_meas + kSoft_, 1e-3);
 
     // Stanley: δ = e_ψ + arctan(k * e_ct / (v + k_soft)). Positive → turn left (FLU).
-    const double delta = wrap_angle(e_psi + std::atan(kGain_ * e_ct / v_denom));
-    double omega = clamp(delta, -maxYawRate_, maxYawRate_);
+    const double delta = WrapAngle(e_psi + std::atan(kGain_ * e_ct / v_denom));
+    double omega = std::clamp(delta, -maxYawRate_, maxYawRate_);
     if (std::abs(e_psi) > pivotAngle_) {
         omega = (e_psi >= 0.0 ? 1.0 : -1.0) * maxYawRate_;
     }

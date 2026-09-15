@@ -8,8 +8,6 @@
 namespace ardurover_nav {
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
-
 double clamp(double v, double lo, double hi) {
     return std::max(lo, std::min(hi, v));
 }

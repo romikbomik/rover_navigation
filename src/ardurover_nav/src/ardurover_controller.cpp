@@ -1,6 +1,7 @@
 #include "ardurover_nav/ardurover_controller.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <memory>
 
 namespace ardurover_nav {
@@ -39,6 +40,16 @@ double ArduroverController::TickDt(const rclcpp::Time& stamp) {
     }
     prevStamp_ = stamp;
     return dt;
+}
+
+double ArduroverController::WrapAngle(double a) {
+    while (a > M_PI) {
+        a -= 2.0 * M_PI;
+    }
+    while (a < -M_PI) {
+        a += 2.0 * M_PI;
+    }
+    return a;
 }
 
 void ArduroverController::RequestGuided() {
