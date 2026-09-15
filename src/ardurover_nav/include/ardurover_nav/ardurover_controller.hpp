@@ -27,6 +27,7 @@ class ArduroverController {
     void PublishTwist(double linear_x, double angular_z);
     void PublishStop();
     double TickDt(const rclcpp::Time& stamp);
+    static double WrapAngle(double a);
 
     rclcpp::Node& node_;
     std::vector<Waypoint> path_;

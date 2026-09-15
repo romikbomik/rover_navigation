@@ -4,28 +4,8 @@
 #include <cmath>
 
 namespace ardurover_nav {
-namespace {
 
-double wrap_angle(double a) {
-    while (a > M_PI) {
-        a -= 2.0 * M_PI;
-    }
-    while (a < -M_PI) {
-        a += 2.0 * M_PI;
-    }
-    return a;
-}
-
-double clamp(double v, double lo, double hi) {
-    return std::max(lo, std::min(hi, v));
-}
-
-}  // namespace
-
-ControllerPID::Pid::Pid(double kp, double ki, double kd, double integral_limit)
-    : kp_(kp), ki_(ki), kd_(kd), integralLimit_(integral_limit) {}
-
-double ControllerPID::Pid::Update(double error, double dt) {
+double ControllerPID::PidUpdate(double error, double dt) {
     if (dt <= 0.0) {
         return kp_ * error;
     }
@@ -40,30 +20,18 @@ double ControllerPID::Pid::Update(double error, double dt) {
     return kp_ * error + ki_ * integral_ + kd_ * derivative;
 }
 
-void ControllerPID::Pid::Reset() {
+void ControllerPID::ResetPid() {
     integral_ = 0.0;
     prevError_ = 0.0;
     hasPrev_ = false;
 }
 
-void ControllerPID::Pid::SetGains(double kp, double ki, double kd) {
-    kp_ = kp;
-    ki_ = ki;
-    kd_ = kd;
-}
-
-void ControllerPID::Pid::SetIntegralLimit(double limit) {
-    integralLimit_ = limit;
-}
-
 ControllerPID::ControllerPID(rclcpp::Node& node, std::vector<Waypoint> path)
-    : ArduroverController(node, path), refPath_(path_), pid_(0.0, 0.0, 0.0, 0.5) {
-    const double kp = node.declare_parameter("pid_kp", 1.5);
-    const double ki = node.declare_parameter("pid_ki", 0.0);
-    const double kd = node.declare_parameter("pid_kd", 0.2);
-    const double i_lim = node.declare_parameter("pid_integral_limit", 0.5);
-    pid_.SetGains(kp, ki, kd);
-    pid_.SetIntegralLimit(i_lim);
+    : ArduroverController(node, path), refPath_(path_) {
+    kp_ = node.declare_parameter("pid_kp", 1.5);
+    ki_ = node.declare_parameter("pid_ki", 0.0);
+    kd_ = node.declare_parameter("pid_kd", 0.2);
+    integralLimit_ = node.declare_parameter("pid_integral_limit", 0.5);
 
     cteGain_ = node.declare_parameter("cte_gain", 1.0);
     maxSpeed_ = node.declare_parameter("max_speed", 1.0);
@@ -75,8 +43,8 @@ ControllerPID::ControllerPID(rclcpp::Node& node, std::vector<Waypoint> path)
 
     RCLCPP_WARN(node_.get_logger(), "ControllerPID is experimental / work in progress");
     RCLCPP_INFO_STREAM(
-        node_.get_logger(), "ControllerPID ready: path length " << refPath_.Length() << " m, kp/ki/kd = " << kp << "/"
-                                                                << ki << "/" << kd
+        node_.get_logger(), "ControllerPID ready: path length " << refPath_.Length() << " m, kp/ki/kd = " << kp_ << "/"
+                                                                << ki_ << "/" << kd_
     );
 }
 
@@ -96,18 +64,18 @@ void ControllerPID::Control(const nav_msgs::msg::Odometry& odom) {
 
     if (s_remain < goalTolerance_) {
         goalReached_ = true;
-        pid_.Reset();
+        ResetPid();
         PublishStop();
         RCLCPP_INFO(node_.get_logger(), "Goal reached (s_remain=%.2f m) — holding stop", s_remain);
         return;
     }
 
-    const double e_psi = wrap_angle(proj.heading - yaw);
+    const double e_psi = WrapAngle(proj.heading - yaw);
     const double e_ct = proj.cross_track;
     const double e = e_psi + cteGain_ * e_ct;
 
-    double omega = pid_.Update(e, dt);
-    omega = clamp(omega, -maxYawRate_, maxYawRate_);
+    double omega = PidUpdate(e, dt);
+    omega = std::clamp(omega, -maxYawRate_, maxYawRate_);
 
     // Three-case speed rule — no PID on speed (ArduRover closes that loop).
     double v = maxSpeed_;
@@ -117,7 +85,7 @@ void ControllerPID::Control(const nav_msgs::msg::Odometry& odom) {
     if (s_remain < slowRadius_) {
         v = std::min(v, maxSpeed_ * (s_remain / slowRadius_));
     }
-    v = clamp(v, 0.0, maxSpeed_);
+    v = std::clamp(v, 0.0, maxSpeed_);
 
     PublishTwist(v, omega);
 
