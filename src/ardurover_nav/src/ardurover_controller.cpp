@@ -81,28 +81,24 @@ bool ArduroverController::SetupArdurover() {
             }
             return false;
         case SetupState::ArmAndGuide: {
-            // Rover Mode::enter() skips EKF checks only while disarmed. Arming first makes
-            // GUIDED fail until EKF failsafe clears. Wait for a decoded mode, set GUIDED,
-            // then arm.
+            // Stream zeros and retry until FCU is fully up; early SetMode is otherwise ignored.
             PublishStop();
             ++setupTicks_;
 
             const bool connected = mavState_ && mavState_->connected;
             const bool armed = mavState_ && mavState_->armed;
             const bool guided = mavState_ && mavState_->mode == "GUIDED";
-            const bool modeDecoded =
-                mavState_ && !mavState_->mode.empty() && mavState_->mode != "INITIALISING" &&
-                mavState_->mode.rfind("CMODE", 0) != 0;
-            if (!connected || !modeDecoded) {
+            if (!connected) {
                 return false;
             }
-            if (!guided && (setupTicks_ % 20 == 1)) {
-                RequestGuided();
-                RCLCPP_INFO_THROTTLE(node_.get_logger(), *node_.get_clock(), 2000, "Requesting GUIDED...");
-            }
-            if (guided && !armed && (setupTicks_ % 20 == 1)) {
+            if (!armed && (setupTicks_ % 20 == 1)) {
                 RequestArm();
                 RCLCPP_INFO_THROTTLE(node_.get_logger(), *node_.get_clock(), 2000, "Requesting arm...");
+            }
+            // Retry GUIDED every second — early requests are often ignored until the FCU is ready.
+            if (!guided && (setupTicks_ % 20 == 1 || setupTicks_ % 20 == 10)) {
+                RequestGuided();
+                RCLCPP_INFO_THROTTLE(node_.get_logger(), *node_.get_clock(), 2000, "Requesting GUIDED...");
             }
             if (armed && guided) {
                 setupState_ = SetupState::Ready;
